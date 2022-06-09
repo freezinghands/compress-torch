@@ -1,3 +1,4 @@
+
 from __future__ import print_function
 import argparse
 import torch
@@ -10,18 +11,17 @@ from sys import getsizeof as sizeof
 
 
 # inserted to smaller dataset
-tr_split_len = 1000
-test_split_len = 250
-flag = 0
+tr_split_len = 20000
+test_split_len = 3330
+# flag = 0
 
-def generate_stream(x):
-    for idx, s in enumerate(x):
-        pass
+# def generate_stream(x):
+#     for idx, s in enumerate(x):
+#         pass
 
+f = open("compressed", 'w')
+f.close()
 
-
-
-f = open("dump.txt", 'w')
 
 class Net(nn.Module):
     def __init__(self):
@@ -32,20 +32,26 @@ class Net(nn.Module):
         self.dropout2 = nn.Dropout(0.5)
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, 10)
+        self.flag = 0
 
     def forward(self, x):
-        print("[COMP] Forward action occurred")
+        # print("[COMP] Forward action occurred")
         x = self.conv1(x)
         # f.write(generate_stream(x))
-        # if flag == 0:
         #     print("[COMP] 01. output of first layer conv1")
             # print(x[0][0][0][0].type())  # it is float32 type https://pytorch.org/docs/stable/tensors.html
             # print(x[0][0][0][0].detach().numpy().tobytes())
-            # with open("compressed", "wb") as p:
-            #     p.write()
+        if self.flag == 0:
+            print(f"size of tensor: {x.size()}")
+            self.flag = 1
+        for i in range(x.size()[3]):
+            with open("compressed", "ab") as p:
+                p.write(x[0][0][0][i].detach().numpy().tobytes())
+                print(f"{float(x[0][0][0][i]):10} saved to file.")
+        # print(x[0][0][0][0].detach().numpy().tobytes())
 
             # print(float(x[0][0][0][0]))
-            flag = 1
+            # self.flag = 1
         # print(type(x))
         # print(x.size())
         # print(x)
@@ -133,7 +139,10 @@ def main():
     parser.add_argument('--save-model', action='store_true', default=True,
                         help='For Saving the current Model')
     args = parser.parse_args()
-    print(f"args: {args}") #types
+
+    print(f"args: {args}")
+    print(type(args))
+
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
     torch.manual_seed(args.seed)
@@ -159,8 +168,8 @@ def main():
                        transform=transform)
 
     # inserted to smaller dataset
-    # dataset1 = torch.utils.data.random_split(dataset1, [tr_split_len, len(dataset1) - tr_split_len])[0]
-    # dataset2 = torch.utils.data.random_split(dataset2, [test_split_len, len(dataset2) - test_split_len])[0]
+    dataset1 = torch.utils.data.random_split(dataset1, [tr_split_len, len(dataset1) - tr_split_len])[0]
+    dataset2 = torch.utils.data.random_split(dataset2, [test_split_len, len(dataset2) - test_split_len])[0]
 
     train_loader = torch.utils.data.DataLoader(dataset1,**train_kwargs)
     test_loader = torch.utils.data.DataLoader(dataset2, **test_kwargs)
@@ -182,4 +191,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-    f.close()
+    # f.close()
