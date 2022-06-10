@@ -1,15 +1,14 @@
 import struct
 
-def read_binary_fp32(filename):
+def read_binary_fp32(filename, byteoffset=0, lines=100):
     with open(filename, "rb") as f:
-        byte = f.read(4)
+        byte = f.read(4*byteoffset)
         i = 0
-        while byte and i < 100:
+        while byte and i < lines:
             # Do stuff with byte.
             byte = f.read(4)
             # print(f"{byte}")
-            print(struct.unpack('f', byte))
-            print(byte.hex())
+            print(f"{byte.hex():9}    {struct.unpack('f', byte)}")
             i += 1
 
 
@@ -25,5 +24,9 @@ def read_binary_int(filename):
             i += 1
 
 if __name__ == '__main__':
-    read_binary_fp32("new-fp-light-compressed-20220610-164042.bin")
-    #read_binary_int("new-fp-light-compressed-20220610-164042.bin")
+    file_name = "new-fp-light-compressed-20220610-164042.bin"
+    byte_offset = 9000
+    print(f"Filename: {file_name}")
+    print(f"byte offset: {4 * byte_offset}, effectively after {byte_offset} fp32 number.")
+    read_binary_fp32(file_name, byteoffset=byte_offset)
+    # read_binary_int("new-fp-light-compressed-20220610-164042.bin")
