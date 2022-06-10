@@ -1,5 +1,4 @@
 
-from __future__ import print_function
 import argparse
 import torch
 import torch.nn as nn
@@ -8,19 +7,44 @@ import torch.optim as optim
 from torchvision import datasets, transforms
 from torch.optim.lr_scheduler import StepLR
 from sys import getsizeof as sizeof
+import datetime
+import time
+from random import randint
 
 
 # inserted to smaller dataset
-tr_split_len = 20000
-test_split_len = 3330
+tr_split_len = 60000
+test_split_len = 10000
 # flag = 0
+
+tm = datetime.datetime.now()
+stamp = f"{tm:%Y%m%d-%H%M%S}"
+outputfilename = f"compressed-{stamp}.bin"
+
+f = open(outputfilename, 'w')
+f.close()
+
+FatigueTH = 15
+is_test_mode = 0
+
+
+def save_bytestream_to_file(x, filename):
+    if not is_test_mode:
+        return None
+    with open(outputfilename, "ab") as p:
+        p.write(x.detach().numpy().tobytes())
+        # for i in range(randint(0, x.size()[0] - 1)):
+        # i = randint(0, x.size()[0] - 1)
+        # for j in range(x.size()[1]-1):
+        #     for k in range(x.size()[2]-1):
+        #         for h in range(x.size()[3]-1):
+        #             # p.write(x[i][j][k][h].detach().numpy().tobytes())
+        #             print(f"{float(x[i][j][k][h]):10} saved to file.")
 
 # def generate_stream(x):
 #     for idx, s in enumerate(x):
 #         pass
 
-f = open("compressed", 'w')
-f.close()
 
 
 class Net(nn.Module):
@@ -33,42 +57,39 @@ class Net(nn.Module):
         self.fc1 = nn.Linear(9216, 128)
         self.fc2 = nn.Linear(128, 10)
         self.flag = 0
+        self.fatigue = 0
 
     def forward(self, x):
-        # print("[COMP] Forward action occurred")
+        self.fatigue += 1
+        print(f"[Forward] iteration: {self.fatigue:2}")
+        # print(x[0][0][0][0].type())  # it is float32 type https://pytorch.org/docs/stable/tensors.html
         x = self.conv1(x)
-        # f.write(generate_stream(x))
-        #     print("[COMP] 01. output of first layer conv1")
-            # print(x[0][0][0][0].type())  # it is float32 type https://pytorch.org/docs/stable/tensors.html
-            # print(x[0][0][0][0].detach().numpy().tobytes())
+
         if self.flag == 0:
             print(f"size of tensor: {x.size()}")
             self.flag = 1
-        for i in range(x.size()[3]):
-            with open("compressed", "ab") as p:
-                p.write(x[0][0][0][i].detach().numpy().tobytes())
-                print(f"{float(x[0][0][0][i]):10} saved to file.")
-        # print(x[0][0][0][0].detach().numpy().tobytes())
-
-            # print(float(x[0][0][0][0]))
-            # self.flag = 1
-        # print(type(x))
-        # print(x.size())
-        # print(x)
+        if self.fatigue > FatigueTH:
+            save_bytestream_to_file(x, outputfilename)
         x = F.relu(x)
-        # print("[COMP] 02. output of first layer relu")
-        # print(sizeof(x))
+        if self.fatigue > FatigueTH:
+            save_bytestream_to_file(x, outputfilename)
         x = self.conv2(x)
-        # print("[COMP] 03. output of first layer conv2")
-        # print(sizeof(x))
+        if self.fatigue > FatigueTH:
+            save_bytestream_to_file(x, outputfilename)
         x = F.relu(x)
-        # print("[COMP] 04. output of first layer relu")
-        # print(sizeof(x))
+        if self.fatigue > FatigueTH:
+            save_bytestream_to_file(x, outputfilename)
         x = F.max_pool2d(x, 2)
+        if self.fatigue > FatigueTH:
+            save_bytestream_to_file(x, outputfilename)
         x = self.dropout1(x)
         x = torch.flatten(x, 1)
         x = self.fc1(x)
+        if self.fatigue > FatigueTH:
+            save_bytestream_to_file(x, outputfilename)
         x = F.relu(x)
+        if self.fatigue > FatigueTH:
+            save_bytestream_to_file(x, outputfilename)
         x = self.dropout2(x)
         x = self.fc2(x)
         output = F.log_softmax(x, dim=1)
@@ -93,6 +114,8 @@ def train(args, model, device, train_loader, optimizer, epoch):
 
 
 def test(model, device, test_loader):
+    global is_test_mode
+    is_test_mode = 1
     model.eval()
     test_loss = 0
     correct = 0
@@ -111,37 +134,30 @@ def test(model, device, test_loader):
         100. * correct / len(test_loader.dataset)))
 
 
-
+class AttrDict(dict):
+    def __init__(self, *args, **kwargs):
+        super(AttrDict, self).__init__(*args, **kwargs)
+        self.__dict__ = self
 
 def main():
     # Training settings
-    parser = argparse.ArgumentParser(description='PyTorch MNIST Example')
-    parser.add_argument('--batch-size', type=int, default=1000, metavar='N',
-                        help='input batch size for training (default: 64)')
-    parser.add_argument('--test-batch-size', type=int, default=100, metavar='N',
-                        help='input batch size for testing (default: 1000)')
-    # parser.add_argument('--epochs', type=int, default=14, metavar='N',
-    #                     help='number of epochs to train (default: 14)')
-    parser.add_argument('--epochs', type=int, default=1, metavar='N',
-                        help='number of epochs to train (default: 14)')
-    parser.add_argument('--lr', type=float, default=1.0, metavar='LR',
-                        help='learning rate (default: 1.0)')
-    parser.add_argument('--gamma', type=float, default=0.7, metavar='M',
-                        help='Learning rate step gamma (default: 0.7)')
-    parser.add_argument('--no-cuda', action='store_true', default=False,
-                        help='disables CUDA training')
-    parser.add_argument('--dry-run', action='store_true', default=False,
-                        help='quickly check a single pass')
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
-                        help='random seed (default: 1)')
-    parser.add_argument('--log-interval', type=int, default=10, metavar='N',
-                        help='how many batches to wait before logging training status')
-    parser.add_argument('--save-model', action='store_true', default=True,
-                        help='For Saving the current Model')
-    args = parser.parse_args()
+    args = AttrDict()
+    args.update({'batch_size': 1000})
+    args.update({'test_batch_size': 100})
+    args.update({'epochs': 1})
+    args.update({'lr': 1.0})
+    args.update({'gamma': 0.7})
+    args.update({'no_cuda': False})
+    args.update({'dry_run': False})
+    args.update({'seed': 1})
+    args.update({'log_interval': 10})
+    args.update({'save_model': False})
 
     print(f"args: {args}")
-    print(type(args))
+    # print(type(args))
+    # Original output
+    # args: Namespace(batch_size=1000, test_batch_size=100, epochs=1, lr=1.0, gamma=0.7, no_cuda=False, dry_run=False,
+    #                 seed=1, log_interval=10, save_model=False)
 
     use_cuda = not args.no_cuda and torch.cuda.is_available()
 
@@ -158,14 +174,21 @@ def main():
         train_kwargs.update(cuda_kwargs)
         test_kwargs.update(cuda_kwargs)
 
-    transform=transforms.Compose([
+    transform1 = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize((0.1307,), (0.3081,))
         ])
+    transform2 = transforms.Compose([
+        transforms.ToTensor()
+    ])
+    #dataset1 = datasets.MNIST('../data', train=True, download=True,
+    #                   transform=transform1)
+    #dataset2 = datasets.MNIST('../data', train=False,
+    #                   transform=transform1)
     dataset1 = datasets.MNIST('../data', train=True, download=True,
-                       transform=transform)
+                              transform=transform2)
     dataset2 = datasets.MNIST('../data', train=False,
-                       transform=transform)
+                              transform=transform2)
 
     # inserted to smaller dataset
     dataset1 = torch.utils.data.random_split(dataset1, [tr_split_len, len(dataset1) - tr_split_len])[0]
@@ -190,5 +213,9 @@ def main():
 
 
 if __name__ == '__main__':
+    start = time.time()
     main()
+    end = time.time()
+    print("==============================")
+    print(f"elapsed time: {end - start:.3} seconds")
     # f.close()
