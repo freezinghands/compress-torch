@@ -1,3 +1,4 @@
+# Tensor type: fp32 (torch.FloatTensor)
 
 import argparse
 import torch
